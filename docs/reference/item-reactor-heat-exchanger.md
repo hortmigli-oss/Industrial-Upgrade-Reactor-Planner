@@ -1664,7 +1664,237 @@ mulHeat
 ---
 
 
-## 36. Статус исследования
+
+## 36. Конкретные значения `reactor.getMulDamage()`
+
+### 36.1. Базовая реализация
+
+В `IAdvReactor` метод имеет default-реализацию:
+
+```java
+default double getMulDamage(
+    final int x,
+    final int y,
+    ItemStack stack
+) {
+    return 1;
+}
+```
+
+В baseline commit отдельного override `getMulDamage()` у реакторов не обнаружено.
+
+Поэтому для всех поддерживаемых реакторов:
+
+```text
+getMulDamage(...) = 1.0
+```
+
+Параметры:
+
+```text
+x
+y
+stack
+```
+
+в default-реализации не используются.
+
+---
+
+### 36.2. Все 16 реакторов
+
+| Семейство | Реакторы | `getMulDamage()` |
+|---|---|---:|
+| Fluid | FS, FA, FI, FP | 1.0 |
+| Gas | GS, GA, GI, GP | 1.0 |
+| Graphite | GRS, GRA, GRI, GRP | 1.0 |
+| Heat | HS, HA, HI, HP | 1.0 |
+
+Таким образом, `getMulDamage()` не зависит от:
+
+- типа реактора;
+- уровня реактора;
+- координат `x/y`;
+- конкретного компонента;
+- установленных Reactor Modules;
+- Graphite Reactor Exchanger.
+
+---
+
+### 36.3. Использование в `LogicReactor`
+
+`LogicReactor` рассчитывает damage:
+
+```java
+lg.damage =
+    (short) (
+        (lg.heat / lg.getItem().getDamageCFromHeat(
+            (int) lg.heat,
+            this.reactor
+        ))
+        * reactor.getMulDamage(
+            lg.getX(),
+            lg.getY(),
+            lg.getStack()
+        )
+        - lg.getItem().getAutoRepair(this.reactor)
+    );
+```
+
+Так как:
+
+```text
+getMulDamage(...) = 1.0
+```
+
+в baseline:
+
+```text
+damage =
+    intHeat / damageCoefficient
+    - autoRepair
+```
+
+до применения специальных правил `LogicReactor`.
+
+---
+
+### 36.4. Специальные damage-множители
+
+Следующие множители существуют в `LogicReactor`, но не являются частью `getMulDamage()`:
+
+```text
+COOLANT_ROD → damage × 10
+CAPACITOR   → damage × 3
+```
+
+Для `HEAT_EXCHANGER` отдельного множителя нет.
+
+Поэтому для Heat Exchanger:
+
+```text
+damage =
+    intHeat / heat_to_damage
+```
+
+поскольку:
+
+```text
+getMulDamage = 1.0
+autoRepair   = 0
+```
+
+---
+
+### 36.5. Важное разделение
+
+Нельзя считать:
+
+```text
+getMulDamage() = 1
+```
+
+эквивалентом:
+
+```text
+отсутствуют все damage-модификаторы
+```
+
+Правильная последовательность:
+
+```text
+1. intHeat
+        ↓
+2. / getDamageCFromHeat()
+        ↓
+3. × getMulDamage()
+        ↓
+4. - getAutoRepair()
+        ↓
+5. специальные правила LogicReactor
+   ├── COOLANT_ROD ×10
+   └── CAPACITOR ×3
+```
+
+Для Heat Exchanger после шага 4 дополнительных модификаторов нет.
+
+---
+
+### 36.6. Влияние на Heat Exchanger
+
+Для всех четырёх Heat Exchanger:
+
+| Компонент | `heat_to_damage` | `getMulDamage()` | `autoRepair` |
+|---|---:|---:|---:|
+| `heat_exchange` | 10 | 1.0 | 0 |
+| `adv_heat_exchange` | 12 | 1.0 | 0 |
+| `imp_heat_exchange` | 15 | 1.0 | 0 |
+| `per_heat_exchange` | 20 | 1.0 | 0 |
+
+Следовательно:
+
+```text
+heat_exchange:
+    damage = intHeat / 10
+
+adv_heat_exchange:
+    damage = intHeat / 12
+
+imp_heat_exchange:
+    damage = intHeat / 15
+
+per_heat_exchange:
+    damage = intHeat / 20
+```
+
+с учётом фактического приведения `lg.heat` к `int` перед вызовом `getDamageCFromHeat()` и приведения итогового damage к `short`.
+
+---
+
+### 36.7. Архитектура TypeScript
+
+Метод стоит сохранить в интерфейсе движка, даже если baseline всегда возвращает `1`:
+
+```ts
+interface ReactorContext {
+    getMulDamage(
+        x: number,
+        y: number,
+        component: ComponentState,
+    ): number;
+}
+```
+
+Baseline:
+
+```ts
+getMulDamage(): number {
+    return 1;
+}
+```
+
+Это сохраняет соответствие API Industrial Upgrade и позволяет без изменения архитектуры поддержать будущий override в другой версии мода.
+
+---
+
+### 36.8. Тесты
+
+- [ ] Fluid → `getMulDamage() === 1.0`.
+- [ ] Gas → `getMulDamage() === 1.0`.
+- [ ] Graphite → `getMulDamage() === 1.0`.
+- [ ] Heat → `getMulDamage() === 1.0`.
+- [ ] Проверить разные `x`.
+- [ ] Проверить разные `y`.
+- [ ] Проверить разные компоненты.
+- [ ] Проверить, что Reactor Modules не изменяют `getMulDamage()`.
+- [ ] Проверить, что Graphite Exchanger не изменяет `getMulDamage()`.
+- [ ] Проверить `COOLANT_ROD ×10` как отдельное правило.
+- [ ] Проверить `CAPACITOR ×3` как отдельное правило.
+- [ ] Проверить отсутствие дополнительного множителя для Heat Exchanger.
+
+---
+
+## 37. Статус исследования
 
 - [x] Полный `ItemReactorHeatExchanger`.
 - [x] Все четыре варианта.
@@ -1694,12 +1924,14 @@ mulHeat
 - [x] Особенность `col`.
 - [x] Система `InventoryReactorModules` для `moduleExchanger`.
 - [x] Конкретные значения `reactor.getMulHeat()`.
-- [ ] Конкретные значения `reactor.getMulDamage()`.
+- [x] Конкретные значения `reactor.getMulDamage()`.
 
 `moduleExchanger` исследован полностью на уровне системы Reactor Modules.
 
-Остаётся внешняя зависимость:
+Все reactor-specific modifiers, исследованные на текущем этапе:
 
-- конкретные значения `reactor.getMulDamage(...)`.
+- `moduleExchanger` — исследован;
+- `getMulHeat(...)` — исследован;
+- `getMulDamage(...)` — исследован.
 
-Конкретные значения `getMulHeat(...)` и их зависимость от Graphite Reactor Exchanger уже исследованы.
+Следующий этап: исследование остальных взаимодействий компонентов и полного порядка изменения heat/durability в `LogicReactor` и `LogicComponent`.

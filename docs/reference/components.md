@@ -930,7 +930,7 @@ ItemComponentVent
 - [X] `ItemReactorCapacitor.java`;
 - [X] `ItemNeutronProtector.java`;
 - [X] `ItemReactorPlate.java` в контексте `LogicComponent`;
-- [ ] `ItemReactorHeatExchanger.java` в контексте `LogicComponent`;
+- [X] `ItemReactorHeatExchanger.java` в контексте `LogicComponent`;
 - [ ] `ItemEnergyCoupler.java` в контексте `LogicReactor`;
 - [ ] `ItemReactorCoolant.java` в контексте `LogicComponent`;
 - [ ] все `getModule*()` у `IAdvReactor`;
