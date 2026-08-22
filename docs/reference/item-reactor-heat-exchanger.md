@@ -685,22 +685,192 @@ Heat Exchanger radiation = 0
 
 ## 26. `reactor.getModuleExchanger()`
 
-Heat Exchanger зависит от reactor-specific modifier:
+`getModuleExchanger()` не является собственным параметром конкретного типа реактора.
+
+В `IAdvReactor` определён метод:
 
 ```java
-getHeatRemovePercent() {
-    return heat_damage * reactor.getModuleExchanger();
-}
+double getModuleExchanger();
 ```
 
-Следовательно:
+Его значение формируется системой `InventoryReactorModules`.
+
+`InventoryReactorModules` содержит четыре слота модулей и при загрузке/изменении содержимого начинает расчёт с:
 
 ```text
-effectiveRemoval =
+stableHeat   = 1
+radiation    = 1
+generation   = 1
+vent         = 1
+componentVent = 1
+exchanger    = 1
+capacitor    = 1
+```
+
+Для каждого установленного `IReactorModule` значение `exchanger` последовательно умножается:
+
+```java
+this.exchanger *= module.getExchanger(stack);
+```
+
+Итоговая формула:
+
+```text
+moduleExchanger =
+    Π(exchangerMultiplier каждого установленного модуля)
+```
+
+Для пустых слотов:
+
+```text
+moduleExchanger = 1.0
+```
+
+Источник:
+
+- `src/main/java/com/denfop/api/reactors/IAdvReactor.java`
+- `src/main/java/com/denfop/api/reactors/InventoryReactorModules.java`
+- `src/main/java/com/denfop/api/reactors/IReactorModule.java`
+- `src/main/java/com/denfop/items/modules/ItemReactorModules.java`
+
+### Модули exchanger
+
+В `ItemReactorModules.CraftingTypes` зарегистрированы четыре модуля, изменяющих `moduleExchanger`:
+
+| Модуль | `getExchanger()` | Эффект |
+|---|---:|---:|
+| `exchanger0` | 1.05 | +5% |
+| `exchanger1` | 1.10 | +10% |
+| `exchanger2` | 1.20 | +20% |
+| `exchanger3` | 1.30 | +30% |
+
+Другие значения этих же модулей:
+
+| Модуль | Stable Heat | Radiation | Generation | Component Vent | Vent | Exchanger | Capacitor |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `exchanger0` | 0.98 | 1.00 | 1.00 | 1.10 | 0.90 | 1.05 | 1.00 |
+| `exchanger1` | 0.95 | 1.00 | 1.00 | 1.25 | 0.875 | 1.10 | 1.00 |
+| `exchanger2` | 0.925 | 1.00 | 1.00 | 1.25 | 0.85 | 1.20 | 1.00 |
+| `exchanger3` | 0.90 | 1.00 | 1.00 | 1.25 | 0.825 | 1.30 | 1.00 |
+
+### Перемножение модулей
+
+Модули не складываются и не выбирается только лучший.
+
+Они перемножаются.
+
+Например:
+
+```text
+exchanger0 + exchanger0
+=
+1.05 × 1.05
+=
+1.1025
+```
+
+И:
+
+```text
+exchanger1 + exchanger3
+=
+1.10 × 1.30
+=
+1.43
+```
+
+При четырёх `exchanger3`:
+
+```text
+1.30⁴ = 2.8561
+```
+
+если все четыре слота заняты этими модулями.
+
+### Влияние на Heat Exchanger
+
+Сам `ItemReactorHeatExchanger` возвращает:
+
+```java
+getHeatRemovePercent(reactor) =
+    heat_damage * reactor.getModuleExchanger();
+```
+
+Поэтому:
+
+```text
+effectiveHeatRemoval =
     heat_damage × moduleExchanger
 ```
 
-Конкретные значения `moduleExchanger` для каждого типа реактора исследуются отдельно в разделе `reactor-specific modifiers`.
+Например, для `heat_exchange`:
+
+```text
+heat_damage = 0.80
+```
+
+Без модулей:
+
+```text
+0.80 × 1.00 = 0.80
+```
+
+С `exchanger0`:
+
+```text
+0.80 × 1.05 = 0.84
+```
+
+С `exchanger1`:
+
+```text
+0.80 × 1.10 = 0.88
+```
+
+С `exchanger2`:
+
+```text
+0.80 × 1.20 = 0.96
+```
+
+С `exchanger3`:
+
+```text
+0.80 × 1.30 = 1.04
+```
+
+Таким образом, effective heat removal может быть больше `1.0`.
+
+### Значение без модулей
+
+Для всех 16 поддерживаемых реакторов при отсутствии Reactor Modules:
+
+```text
+moduleExchanger = 1.0
+```
+
+Сам тип и уровень реактора не меняют это значение.
+
+Поэтому `moduleExchanger` не следует хранить в `ReactorDefinition`.
+
+Его следует рассчитывать из установленного набора модулей.
+
+Рекомендуемая модель:
+
+```ts
+interface ReactorModules {
+    exchanger: number;
+}
+
+function calculateExchangerModifier(
+    modules: ReactorModule[],
+): number {
+    return modules.reduce(
+        (result, module) => result * module.exchanger,
+        1,
+    );
+}
+```
 
 ---
 
@@ -799,7 +969,7 @@ getHeat() {
 
 getHeatRemovePercent(context: ReactorContext) {
     return this.definition.heatDamage *
-        context.moduleExchanger;
+        context.modules.exchanger;
 }
 
 getDamageCFromHeat() {
@@ -884,7 +1054,8 @@ durability -= damage
 ```text
 sourceHeat = 100
 col = 1
-moduleExchanger = 1
+modules = []
+moduleExchanger = 1.0
 mulHeat = 1
 mulDamage = 1
 
@@ -984,7 +1155,8 @@ ROD → HEAT_EXCHANGER → VENT
 ```text
 sourceHeat = 100
 col = 1
-moduleExchanger = 1
+modules = []
+moduleExchanger = 1.0
 mulHeat = 1
 mulDamage = 1
 ```
@@ -1018,6 +1190,47 @@ item.damageItem(...) не вызывается
 
 ---
 
+## 35. Тесты `moduleExchanger`
+
+Проверить расчёт итогового `moduleExchanger`:
+
+- [ ] без модулей → `1.0`;
+- [ ] один `exchanger0` → `1.05`;
+- [ ] один `exchanger1` → `1.10`;
+- [ ] один `exchanger2` → `1.20`;
+- [ ] один `exchanger3` → `1.30`;
+- [ ] два `exchanger0` → `1.1025`;
+- [ ] `exchanger1 + exchanger3` → `1.43`;
+- [ ] четыре `exchanger3` → `2.8561`.
+
+Проверить влияние на первый Heat Exchanger:
+
+```text
+heat_damage = 0.80
+```
+
+Ожидается:
+
+```text
+без модулей:
+0.80
+
+exchanger0:
+0.84
+
+exchanger1:
+0.88
+
+exchanger2:
+0.96
+
+exchanger3:
+1.04
+```
+
+---
+
+
 ## 35. Статус исследования
 
 - [x] Полный `ItemReactorHeatExchanger`.
@@ -1046,8 +1259,15 @@ item.damageItem(...) не вызывается
 - [x] Heat Exchanger → Capacitor.
 - [x] Heat Exchanger → Coolant Rod.
 - [x] Особенность `col`.
-- [ ] Конкретные значения `reactor.getModuleExchanger()`.
+- [x] Система `InventoryReactorModules` для `moduleExchanger`.
 - [ ] Конкретные значения `reactor.getMulHeat()`.
 - [ ] Конкретные значения `reactor.getMulDamage()`.
 
-Внешние зависимости относятся к отдельному этапу исследования `reactor-specific modifiers`.
+`moduleExchanger` исследован полностью на уровне системы Reactor Modules.
+
+Остаются внешние зависимости:
+
+- конкретные значения `reactor.getMulHeat(...)`;
+- конкретные значения `reactor.getMulDamage(...)`.
+
+Они относятся к следующему этапу исследования `reactor-specific modifiers`.
