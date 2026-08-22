@@ -926,10 +926,10 @@ ItemComponentVent
 
 Необходимо отдельно изучить:
 
-- [ ] все значения `Config.*`, используемые топливными стержнями;
-- [ ] `ItemReactorCapacitor.java`;
-- [ ] `ItemNeutronProtector.java`;
-- [ ] `ItemReactorPlate.java` в контексте `LogicComponent`;
+- [X] все значения `Config.*`, используемые топливными стержнями;
+- [X] `ItemReactorCapacitor.java`;
+- [X] `ItemNeutronProtector.java`;
+- [X] `ItemReactorPlate.java` в контексте `LogicComponent`;
 - [ ] `ItemReactorHeatExchanger.java` в контексте `LogicComponent`;
 - [ ] `ItemEnergyCoupler.java` в контексте `LogicReactor`;
 - [ ] `ItemReactorCoolant.java` в контексте `LogicComponent`;
