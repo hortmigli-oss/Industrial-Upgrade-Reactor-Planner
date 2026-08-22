@@ -199,7 +199,7 @@ getHeatRemovePercent(reactor) =
     heat_damage × reactor.getModuleExchanger();
 ```
 
-Итог:
+Итоговая формула `LogicReactor`:
 
 ```text
 receivedHeat =
@@ -208,6 +208,20 @@ receivedHeat =
     × moduleExchanger
     × mulHeat
 ```
+
+где:
+
+```text
+moduleExchanger =
+    модификатор Reactor Modules
+
+mulHeat =
+    reactor.getMulHeat(x, y, stack)
+```
+
+Для Fluid, Gas и Heat реакторов `mulHeat = 1.0`.
+
+Для Graphite Reactor `mulHeat` зависит от exchanger-блоков, назначенных на колонку `x`.
 
 где `heat_damage` зависит от уровня:
 
@@ -870,11 +884,368 @@ function calculateExchangerModifier(
         1,
     );
 }
+
+
+Для simulation context необходимо хранить `mulHeat` отдельно:
+
+```ts
+interface ReactorContext {
+    modules: ReactorModules;
+    mulHeat: number;
+}
+```
+
+Для Fluid, Gas и Heat:
+
+```ts
+context.mulHeat = 1;
+```
+
+Для Graphite:
+
+```ts
+context.mulHeat =
+    exchangersForColumn.reduce(
+        (result, exchanger) => result * exchanger.columnMultiplier,
+        1,
+    );
+```
+
+Итоговый коэффициент:
+
+```text
+effective heat coefficient =
+    heatDamage
+    × modules.exchanger
+    × context.mulHeat
+```
 ```
 
 ---
 
-## 27. Роль `col`
+
+## 27. Конкретные значения `reactor.getMulHeat()`
+
+### 27.1. Базовая реализация
+
+В `IAdvReactor` `getMulHeat(...)` имеет значение по умолчанию:
+
+```java
+default double getMulHeat(
+    final int x,
+    final int y,
+    ItemStack stack
+) {
+    return 1;
+}
+```
+
+Поэтому для реакторов, которые не переопределяют этот метод:
+
+```text
+mulHeat = 1.0
+```
+
+В baseline это:
+
+| Семейство | Реакторы | `getMulHeat()` |
+|---|---|---:|
+| Fluid | FS, FA, FI, FP | 1.0 |
+| Gas | GS, GA, GI, GP | 1.0 |
+| Heat | HS, HA, HI, HP | 1.0 |
+| Graphite | GRS, GRA, GRI, GRP | зависит от exchanger-блоков |
+
+---
+
+### 27.2. Graphite Reactor
+
+Графитовый реактор переопределяет:
+
+```java
+@Override
+public double getMulHeat(
+    final int x,
+    final int y,
+    final ItemStack stack
+) {
+    double coef = 1;
+
+    for (IExchanger exchanger : this.listExchanger) {
+        coef *= exchanger.getPercent(x);
+    }
+
+    return coef;
+}
+```
+
+Следовательно:
+
+```text
+mulHeat(x) =
+    Π(exchanger.getPercent(x))
+```
+
+Параметры:
+
+```text
+x = колонка реактора
+y = не используется
+stack = не используется
+```
+
+---
+
+### 27.3. Что такое `listExchanger`
+
+Графитовый контроллер собирает все multiblock-элементы, реализующие:
+
+```text
+IExchanger
+```
+
+После этого они попадают в:
+
+```text
+listExchanger
+```
+
+Каждый exchanger может быть назначен на определённую колонку `x`.
+
+---
+
+### 27.4. Как рассчитывается `TileEntityExchanger.percent`
+
+У `TileEntityExchanger`:
+
+```text
+percent = 1
+```
+
+при пустом слоте.
+
+При установке `IExchangerItem`:
+
+```java
+percent =
+    1 - item.getPercent();
+```
+
+Метод:
+
+```java
+getPercent(int x)
+```
+
+возвращает:
+
+```text
+1
+```
+
+если:
+
+- exchanger не подключён к главному контроллеру;
+- передана другая колонка;
+- слот exchanger пуст.
+
+Иначе возвращается рассчитанный `percent`.
+
+То есть конкретный exchanger влияет только на назначенную ему колонку.
+
+---
+
+### 27.5. Item Exchanger
+
+В baseline доступны четыре Item Exchanger:
+
+| Item | `item.getPercent()` | `TileEntityExchanger.percent` | Влияние на `mulHeat` |
+|---|---:|---:|---:|
+| `simple_exchanger` | 0.05 | 0.95 | ×0.95 |
+| `adv_exchanger` | 0.10 | 0.90 | ×0.90 |
+| `imp_exchanger` | 0.15 | 0.85 | ×0.85 |
+| `per_exchanger` | 0.20 | 0.80 | ×0.80 |
+
+Ключевой момент:
+
+```text
+item.getPercent()
+```
+
+и:
+
+```text
+TileEntityExchanger.percent
+```
+
+— разные величины.
+
+Например:
+
+```text
+simple_exchanger:
+    item percent = 0.05
+    block percent = 1 - 0.05 = 0.95
+```
+
+Именно `0.95` используется в `getMulHeat()`.
+
+---
+
+### 27.6. Один exchanger
+
+Для одной колонки:
+
+| Установленный exchanger | `mulHeat` |
+|---|---:|
+| Нет | 1.0000 |
+| `simple_exchanger` | 0.9500 |
+| `adv_exchanger` | 0.9000 |
+| `imp_exchanger` | 0.8500 |
+| `per_exchanger` | 0.8000 |
+
+---
+
+### 27.7. Несколько exchanger на одной колонке
+
+Модификаторы перемножаются.
+
+Например:
+
+```text
+simple + simple
+=
+0.95 × 0.95
+=
+0.9025
+```
+
+```text
+simple + advanced
+=
+0.95 × 0.90
+=
+0.855
+```
+
+```text
+advanced + perfect
+=
+0.90 × 0.80
+=
+0.72
+```
+
+Четыре `per_exchanger`:
+
+```text
+0.80⁴ = 0.4096
+```
+
+---
+
+### 27.8. Влияние на Heat Exchanger
+
+Полная формула для Heat Exchanger:
+
+```text
+receivedHeat =
+    sourceHeat / col
+    × heat_damage
+    × moduleExchanger
+    × mulHeat
+```
+
+Для Fluid/Gas/Heat:
+
+```text
+mulHeat = 1.0
+```
+
+Для Graphite:
+
+```text
+mulHeat =
+    Π(exchanger.percent текущей колонки)
+```
+
+Поэтому, например, для `heat_exchange` первого уровня:
+
+```text
+heat_damage = 0.80
+moduleExchanger = 1.00
+mulHeat = 0.95
+```
+
+получаем:
+
+```text
+effective heat coefficient =
+    0.80 × 1.00 × 0.95
+    =
+    0.76
+```
+
+При:
+
+```text
+sourceHeat = 100
+col = 1
+```
+
+получим:
+
+```text
+receivedHeat = 100 × 0.76 = 76
+```
+
+---
+
+### 27.9. Важное разделение модификаторов
+
+Нельзя объединять:
+
+```text
+moduleExchanger
+```
+
+и:
+
+```text
+mulHeat
+```
+
+Это два независимых механизма.
+
+```text
+Reactor Modules
+    ↓
+moduleExchanger
+    ↓
+ItemReactorHeatExchanger.getHeatRemovePercent()
+```
+
+и:
+
+```text
+Graphite Reactor Exchanger blocks
+    ↓
+getMulHeat(x, y, stack)
+    ↓
+LogicReactor
+```
+
+Итог:
+
+```text
+effectiveHeatRemoval =
+    heat_damage
+    × moduleExchanger
+    × mulHeat
+```
+
+---
+
+## 36. Роль `col`
 
 `LogicReactor` считает:
 
@@ -902,7 +1273,7 @@ component.heat / col
 
 ---
 
-## 28. TypeScript-модель
+## 36. TypeScript-модель
 
 ```ts
 interface ReactorHeatExchangerDefinition {
@@ -958,7 +1329,7 @@ const heatExchangers = [
 
 ---
 
-## 29. Логика компонента в TypeScript
+## 36. Логика компонента в TypeScript
 
 Концептуальная модель:
 
@@ -999,7 +1370,7 @@ isTickable() {
 
 ---
 
-## 30. Отличие от Plate
+## 36. Отличие от Plate
 
 | Свойство | Plate | Heat Exchanger |
 |---|---:|---:|
@@ -1015,7 +1386,7 @@ isTickable() {
 
 ---
 
-## 31. Главная последовательность расчёта
+## 36. Главная последовательность расчёта
 
 Для Heat Exchanger:
 
@@ -1047,7 +1418,7 @@ durability -= damage
 
 ---
 
-## 32. Пример расчёта
+## 36. Пример расчёта
 
 Вход:
 
@@ -1095,7 +1466,7 @@ durability -= 8
 
 ---
 
-## 33. Unit Tests
+## 36. Unit Tests
 
 ### Данные
 
@@ -1142,7 +1513,7 @@ durability -= 8
 
 ---
 
-## 34. Golden Test
+## 36. Golden Test
 
 Минимальная схема:
 
@@ -1190,7 +1561,7 @@ item.damageItem(...) не вызывается
 
 ---
 
-## 35. Тесты `moduleExchanger`
+## 36. Тесты `moduleExchanger`
 
 Проверить расчёт итогового `moduleExchanger`:
 
@@ -1231,7 +1602,69 @@ exchanger3:
 ---
 
 
-## 35. Статус исследования
+## 36. Тесты `getMulHeat()`
+
+### Базовые реакторы
+
+- [ ] Fluid → `mulHeat = 1.0`.
+- [ ] Gas → `mulHeat = 1.0`.
+- [ ] Heat → `mulHeat = 1.0`.
+
+### Graphite Reactor
+
+- [ ] Без exchanger-блоков → `1.0`.
+- [ ] `simple_exchanger` → `0.95`.
+- [ ] `adv_exchanger` → `0.90`.
+- [ ] `imp_exchanger` → `0.85`.
+- [ ] `per_exchanger` → `0.80`.
+- [ ] `simple + simple` → `0.9025`.
+- [ ] `simple + advanced` → `0.855`.
+- [ ] `advanced + perfect` → `0.72`.
+- [ ] четыре `per_exchanger` → `0.4096`.
+
+### Привязка к колонке
+
+- [ ] Exchanger влияет только на назначенную колонку `x`.
+- [ ] Для другой колонки `getPercent(x)` возвращает `1`.
+- [ ] Пустой слот возвращает `1`.
+- [ ] Exchanger без главного контроллера возвращает `1`.
+
+### Интеграция с Heat Exchanger
+
+Для:
+
+```text
+heat_damage = 0.80
+moduleExchanger = 1.0
+mulHeat = 0.95
+sourceHeat = 100
+col = 1
+```
+
+ожидается:
+
+```text
+receivedHeat = 76
+```
+
+Проверить отдельно:
+
+```text
+moduleExchanger
+```
+
+и:
+
+```text
+mulHeat
+```
+
+чтобы они не смешивались в один параметр.
+
+---
+
+
+## 36. Статус исследования
 
 - [x] Полный `ItemReactorHeatExchanger`.
 - [x] Все четыре варианта.
@@ -1260,14 +1693,13 @@ exchanger3:
 - [x] Heat Exchanger → Coolant Rod.
 - [x] Особенность `col`.
 - [x] Система `InventoryReactorModules` для `moduleExchanger`.
-- [ ] Конкретные значения `reactor.getMulHeat()`.
+- [x] Конкретные значения `reactor.getMulHeat()`.
 - [ ] Конкретные значения `reactor.getMulDamage()`.
 
 `moduleExchanger` исследован полностью на уровне системы Reactor Modules.
 
-Остаются внешние зависимости:
+Остаётся внешняя зависимость:
 
-- конкретные значения `reactor.getMulHeat(...)`;
 - конкретные значения `reactor.getMulDamage(...)`.
 
-Они относятся к следующему этапу исследования `reactor-specific modifiers`.
+Конкретные значения `getMulHeat(...)` и их зависимость от Graphite Reactor Exchanger уже исследованы.
