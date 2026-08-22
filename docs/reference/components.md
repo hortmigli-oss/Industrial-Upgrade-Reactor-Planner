@@ -1138,3 +1138,404 @@ src/main/java/com/denfop/Config.java
 4. Исследовать `LogicReactor`.
 5. Создать golden tests.
 6. После этого реализовать компоненты в TypeScript.
+
+---
+
+# 26. Config-параметры, используемые топливными стержнями
+
+Этот раздел уточняет параметры `Config.*`, которые участвуют в создании Fuel Rod в baseline commit:
+
+`16b7fb9cfb7fbb3171e35a63532ebc0a112f665c`
+
+Источники:
+
+- `src/main/java/com/denfop/Config.java`
+- `src/main/java/com/denfop/IUItem.java`
+
+## 26.1. Главное правило
+
+Нельзя считать все параметры вида `*RodCells` и `*RodHeat` фактическими параметрами Fuel Rod.
+
+В `Config.java` присутствуют параметры конфигурации стержней, но при создании некоторых `ItemBaseRod` используются только отдельные поля `Config`, а `cells` и `heat` задаются непосредственно в `IUItem.java`.
+
+Поэтому источником истины для симулятора является фактический вызов конструктора `new ItemBaseRod(...)`. `Config` учитывается только там, где его значение реально передаётся в конструктор.
+
+## 26.2. Config-параметры, реально используемые при создании Fuel Rod
+
+| `Config` | Значение по умолчанию | Используемый Fuel Rod |
+|---|---:|---|
+| `uran233Power` | 3.0 | Uranium-233 |
+| `toriyPower` | 3.0 | Thorium |
+| `americiumPower` | 4.5 | Americium |
+| `neptuniumPower` | 3.5 | Neptunium |
+| `curiumPower` | 9.5 | Curium |
+| `californiaPower` | 18.0 | Californium |
+| `mendeleviumPower` | 26.0 | Fermium |
+| `berkeliumPower` | 20.0 | Berkelium |
+| `einsteiniumPower` | 23.0 | Einsteinium |
+| `ProtonPower` | 6.0 | Proton |
+
+## 26.3. Uranium-233
+
+В `Config.java`:
+
+```text
+uran233RodCells = 20000
+uran233RodHeat  = 1
+uran233Power    = 3.0
+```
+
+При регистрации используются только `Config.uran233Power`.
+
+Фактические параметры `ItemBaseRod`:
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 35 | 3.0 | 1 |
+| Dual | 2 | 70 | 3.0 | 1 |
+| Quad | 4 | 140 | 3.0 | 1 |
+
+`uran233RodCells` и `uran233RodHeat` не участвуют в расчёте этих Fuel Rod.
+
+## 26.4. Thorium
+
+В `Config.java`:
+
+```text
+toriyRodCells = 10000
+toriyRodHeat  = 1
+toriyPower    = 3.0
+```
+
+Используется только `toriyPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 50 | 3.0 | 2 |
+| Dual | 2 | 100 | 3.0 | 2 |
+| Quad | 4 | 200 | 3.0 | 2 |
+
+## 26.5. Americium
+
+В `Config.java`:
+
+```text
+americiumRodCells = 5000
+americiumRodHeat  = 1
+americiumPower    = 4.5
+```
+
+Используется только `americiumPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 80 | 4.5 | 2 |
+| Dual | 2 | 160 | 4.5 | 2 |
+| Quad | 4 | 320 | 4.5 | 2 |
+
+## 26.6. Neptunium
+
+В `Config.java`:
+
+```text
+neptuniumRodCells = 15000
+neptuniumRodHeat  = 1
+neptuniumPower    = 3.5
+```
+
+Используется только `neptuniumPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 65 | 3.5 | 2 |
+| Dual | 2 | 130 | 3.5 | 2 |
+| Quad | 4 | 260 | 3.5 | 2 |
+
+## 26.7. Curium
+
+В `Config.java`:
+
+```text
+curiumRodCells = 8000
+curiumRodHeat  = 2
+curiumPower    = 9.5
+```
+
+Используется только `curiumPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 100 | 9.5 | 3 |
+| Dual | 2 | 200 | 9.5 | 3 |
+| Quad | 4 | 400 | 9.5 | 3 |
+
+## 26.8. Californium
+
+В `Config.java`:
+
+```text
+californiaRodCells = 20000
+californiaRodHeat  = 3
+californiaPower    = 18.0
+```
+
+Используется только `californiaPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 120 | 18.0 | 3 |
+| Dual | 2 | 240 | 18.0 | 3 |
+| Quad | 4 | 480 | 18.0 | 3 |
+
+## 26.9. Fermium
+
+Отдельного `fermiumPower` в `Config.java` нет. В регистрации Fermium используется `Config.mendeleviumPower`.
+
+```text
+mendeleviumPower = 26.0
+```
+
+Фактически:
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 230 | 26.0 | 4 |
+| Dual | 2 | 460 | 26.0 | 4 |
+| Quad | 4 | 920 | 26.0 | 4 |
+
+Это особенность baseline commit и должна быть сохранена в симуляторе.
+
+## 26.10. Mendelevium
+
+В `Config.java`:
+
+```text
+mendeleviumRodCells = 30000
+mendeleviumRodHeat  = 4
+mendeleviumPower    = 26.0
+```
+
+Но в `IUItem.java` для Mendelevium power задаётся напрямую как `36`.
+
+Фактически:
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 260 | 36.0 | 4 |
+| Dual | 2 | 520 | 36.0 | 4 |
+| Quad | 4 | 1050 | 36.0 | 4 |
+
+`mendeleviumPower = 26.0` не используется для зарегистрированных Mendelevium Fuel Rod.
+
+## 26.11. Nobelium
+
+Отдельного `Config.nobeliumPower` нет. Power задан напрямую как `49`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 285 | 49.0 | 4 |
+| Dual | 2 | 590 | 49.0 | 4 |
+| Quad | 4 | 1200 | 49.0 | 4 |
+
+## 26.12. Lawrencium
+
+Отдельного Config-параметра мощности нет. Power задан напрямую как `60`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 300 | 60.0 | 4 |
+| Dual | 2 | 620 | 60.0 | 4 |
+| Quad | 4 | 1300 | 60.0 | 4 |
+
+## 26.13. Berkelium
+
+В `Config.java`:
+
+```text
+berkeliumRodCells = 22500
+berkeliumRodHeat  = 3
+berkeliumPower    = 20.0
+```
+
+Используется только `berkeliumPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 150 | 20.0 | 4 |
+| Dual | 2 | 300 | 20.0 | 4 |
+| Quad | 4 | 600 | 20.0 | 4 |
+
+## 26.14. Einsteinium
+
+В `Config.java`:
+
+```text
+einsteiniumRodCells = 25000
+einsteiniumRodHeat  = 4
+einsteiniumPower    = 23.0
+```
+
+Используется только `einsteiniumPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 180 | 23.0 | 4 |
+| Dual | 2 | 360 | 23.0 | 4 |
+| Quad | 4 | 720 | 23.0 | 4 |
+
+## 26.15. Proton
+
+В `Config.java`:
+
+```text
+ProtonRodCells = 30000
+ProtonRodHeat  = 1
+ProtonPower    = 6.0
+```
+
+Используется только `ProtonPower`.
+
+| Вариант | Cells | Heat | Power | Level |
+|---|---:|---:|---:|---:|
+| Simple | 1 | 95 | 6.0 | 3 |
+| Dual | 2 | 190 | 6.0 | 3 |
+| Quad | 4 | 380 | 6.0 | 3 |
+
+---
+
+# 27. Fuel Rod: итоговый baseline
+
+| Семейство | Power | Level | Simple Heat | Dual Heat | Quad Heat |
+|---|---:|---:|---:|---:|---:|
+| Uranium | 1.5 | 1 | 25 | 50 | 100 |
+| MOX | 3.5 | 1 | 40 | 80 | 160 |
+| Uranium-233 | 3.0 | 1 | 35 | 70 | 140 |
+| Thorium | 3.0 | 2 | 50 | 100 | 200 |
+| Americium | 4.5 | 2 | 80 | 160 | 320 |
+| Neptunium | 3.5 | 2 | 65 | 130 | 260 |
+| Curium | 9.5 | 3 | 100 | 200 | 400 |
+| Californium | 18.0 | 3 | 120 | 240 | 480 |
+| Fermium | 26.0 | 4 | 230 | 460 | 920 |
+| Mendelevium | 36.0 | 4 | 260 | 520 | 1050 |
+| Nobelium | 49.0 | 4 | 285 | 590 | 1200 |
+| Lawrencium | 60.0 | 4 | 300 | 620 | 1300 |
+| Berkelium | 20.0 | 4 | 150 | 300 | 600 |
+| Einsteinium | 23.0 | 4 | 180 | 360 | 720 |
+| Proton | 6.0 | 3 | 95 | 190 | 380 |
+
+Для всех семейств:
+
+```text
+Simple cells = 1
+Dual   cells = 2
+Quad   cells = 4
+```
+
+## 27.1. Radiation
+
+`ItemBaseRod` рассчитывает радиацию:
+
+```text
+radiation = power × level × cells
+```
+
+## 27.2. Energy production
+
+`ItemBaseRod` использует множитель количества ячеек:
+
+```text
+cells = 1 → multiplier 5
+cells = 2 → multiplier 20
+cells = 4 → multiplier 60
+```
+
+Итог:
+
+```text
+energyProduction = cellMultiplier × power × level
+```
+
+---
+
+# 28. Config-параметры, которые не следует использовать как фактические параметры Fuel Rod
+
+В `Config.java` присутствуют:
+
+```text
+uran233RodCells
+uran233RodHeat
+
+toriyRodCells
+toriyRodHeat
+
+americiumRodCells
+americiumRodHeat
+
+neptuniumRodCells
+neptuniumRodHeat
+
+curiumRodCells
+curiumRodHeat
+
+californiaRodCells
+californiaRodHeat
+
+mendeleviumRodCells
+mendeleviumRodHeat
+
+berkeliumRodCells
+berkeliumRodHeat
+
+einsteiniumRodCells
+einsteiniumRodHeat
+
+ProtonRodCells
+ProtonRodHeat
+```
+
+В baseline `IUItem.java` эти значения не используются в соответствующих вызовах `new ItemBaseRod(...)`.
+
+Для симулятора они должны считаться справочными значениями `Config.java`, но не входными параметрами фактического Fuel Rod.
+
+---
+
+# 29. Canonical configuration
+
+Для нашего симулятора принимается политика:
+
+> Canonical configuration — значения по умолчанию, заданные в `Config.java` baseline commit.
+
+Причина: Industrial Upgrade позволяет изменить эти значения через Minecraft configuration file. Без конкретного `.cfg` невозможно определить пользовательские значения.
+
+Поэтому baseline симулятора:
+
+```text
+Industrial Upgrade commit
++
+default Config values
+=
+canonical simulator baseline
+```
+
+Если позднее нужна совместимость с пользовательскими конфигурациями, конфигурацию следует сделать отдельным входным параметром симулятора.
+
+---
+
+# 30. Статус исследования Fuel Rod
+
+- [x] Найдены все `Config.*`, связанные с reactor rods.
+- [x] Проверено, какие Config-поля реально используются в `IUItem.java`.
+- [x] Отделены реальные параметры Fuel Rod от неиспользуемых `*RodCells` и `*RodHeat`.
+- [x] Зафиксированы значения `power`.
+- [x] Зафиксированы `level`.
+- [x] Зафиксированы `cells`.
+- [x] Зафиксированы `heat`.
+- [x] Зафиксирована формула radiation.
+- [x] Зафиксирована формула energy production.
+- [x] Зафиксированы особенности Fermium.
+- [x] Зафиксирована особенность Mendelevium.
+- [x] Зафиксирована политика canonical configuration.
+
+Следующая задача:
+
+> Исследовать полную реализацию `ItemNeutronProtector.java`, `ItemReactorCapacitor.java` и взаимодействие этих компонентов с `LogicComponent` и `LogicReactor`.
